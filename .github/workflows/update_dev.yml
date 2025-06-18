@@ -1,0 +1,87 @@
+name: Java Maven Build & Create Docker image & Push to ECR & Update K8S image
+
+on:
+  push:
+    branches: [ "dev" ]
+  pull_request:
+    branches: [ "dev" ]
+
+jobs:
+
+  create_docker_image_from_pom:
+    runs-on: ubuntu-latest
+    outputs:
+      IMAGE_TAG: ${{ steps.get-app-version-from-pom.outputs.info }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup AWS ECR Details
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{secrets.AWS_REGION}}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Get application version
+        id: get-app-version-from-pom
+        uses: mavrosxristoforos/get-xml-info@2.0
+        with:
+          xml-file: 'pom.xml'
+          xpath: "//*[local-name()='project']/*[local-name()='version']"
+
+      - name: Build and push the tagged docker image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{vars.AWS_ECR_REPO}}
+          IMAGE_TAG: ${{ steps.get-app-version-from-pom.outputs.info }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+  update_deployment_yaml_for_dev_overlay:
+    runs-on: ubuntu-latest
+    needs:
+      - create_docker_image_from_pom
+    steps:
+      - uses: actions/checkout@v4
+        with:
+            repository: kolyaiks/argo-deployment-demo-infra
+            ref: dev
+            token: ${{secrets.ARGO_DEPLOYMENT_DEMO_INFRA_REPO_PAT}}
+
+      - uses: imranismail/setup-kustomize@v2
+
+      # to use with while logging into ECR
+      - name: Setup AWS ECR Details
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{secrets.AWS_REGION}}
+
+      # doing it from the second job because the output from the first job is treated as a secret and isn't passed between jobs
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Updating the image version in deployment YAML
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{vars.AWS_ECR_REPO}}
+          IMAGE_TAG: ${{ needs.create_docker_image_from_pom.outputs.IMAGE_TAG }}
+        run: kustomize edit set image $ECR_REGISTRY/$ECR_REPOSITORY:0.0.1=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        working-directory: k8s-yaml/app/argo-deployment-demo-app/overlays/dev
+
+      - name: Pushing updated yaml to IAC repo
+        env:
+          IMAGE_TAG: ${{ needs.create_docker_image_from_pom.outputs.IMAGE_TAG }}
+        run: |
+          git config user.email "gitops@niks.cloud"
+          git config user.name "gitops"
+          git commit -am "Bumping application version to $IMAGE_TAG"
+          git pull --rebase
+          git push origin dev

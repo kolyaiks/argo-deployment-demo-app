@@ -1,0 +1,24 @@
+# Build artifacts
+target/
+build/
+*.jar
+*.war
+*.class
+
+# IDE-specific files
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+.vscode/
+
+# Dependency-related files
+.gradle/
+/.mvn/wrapper/maven-wrapper.jar
+
+# Sensitive information (example)
+application-dev.properties
+
+# Log files
+*.log
