@@ -8,12 +8,30 @@ on:
 
 jobs:
 
-  create_docker_image_from_pom:
+  build_scan_publish:
     runs-on: ubuntu-latest
     outputs:
       IMAGE_TAG: ${{ steps.get-app-version-from-pom.outputs.info }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build and Test
+        run: mvn clean verify
+
+      - name: Security Scan - Source & Dependencies
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: '0' ## just show the sec findings, don't fail
 
       - name: Setup AWS ECR Details
         uses: aws-actions/configure-aws-credentials@v1
@@ -33,19 +51,37 @@ jobs:
           xml-file: 'pom.xml'
           xpath: "//*[local-name()='project']/*[local-name()='version']"
 
-      - name: Build and push the tagged docker image to Amazon ECR
+      - name: Build docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{vars.AWS_ECR_REPO}}
           IMAGE_TAG: ${{ steps.get-app-version-from-pom.outputs.info }}
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+
+      - name: Security Scan - Container Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.AWS_ECR_REPO }}
+          IMAGE_TAG: ${{ steps.get-app-version-from-pom.outputs.info }}
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ vars.AWS_ECR_REPO }}:${{ steps.get-app-version-from-pom.outputs.info }}
+          severity: HIGH,CRITICAL
+          exit-code: '0' ## just show the sec findings, don't fail
+
+      - name: Push Docker Image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.AWS_ECR_REPO }}
+          IMAGE_TAG: ${{ steps.get-app-version-from-pom.outputs.info }}
+        run: |
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
   update_deployment_yaml_for_dev_overlay:
     runs-on: ubuntu-latest
     needs:
-      - create_docker_image_from_pom
+      - build_scan_publish
     steps:
       - uses: actions/checkout@v4
         with:
