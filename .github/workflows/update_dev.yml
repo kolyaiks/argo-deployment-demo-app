@@ -108,13 +108,13 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{vars.AWS_ECR_REPO}}
-          IMAGE_TAG: ${{ needs.create_docker_image_from_pom.outputs.IMAGE_TAG }}
+          IMAGE_TAG: ${{ needs.build_scan_publish.outputs.IMAGE_TAG }}
         run: kustomize edit set image 123456789123.dkr.ecr.us-east-1.amazonaws.com/argo-deployment-demo-app:0.0.1=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         working-directory: k8s-yaml/app/argo-deployment-demo-app/overlays/dev
 
       - name: Pushing updated yaml to IAC repo
         env:
-          IMAGE_TAG: ${{ needs.create_docker_image_from_pom.outputs.IMAGE_TAG }}
+          IMAGE_TAG: ${{ needs.build_scan_publish.outputs.IMAGE_TAG }}
         run: |
           git config user.email "gitops@niks.cloud"
           git config user.name "gitops"
