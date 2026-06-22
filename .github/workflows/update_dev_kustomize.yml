@@ -118,6 +118,8 @@ jobs:
         run: |
           git config user.email "gitops@niks.cloud"
           git config user.name "gitops"
-          git commit -am "Bumping application version to $IMAGE_TAG"
-          git pull --rebase
-          git push origin dev
+          if ! git diff --quiet; then
+            git commit -am "Bumping application version to $IMAGE_TAG"
+            git pull --rebase
+            git push origin dev
+          fi
