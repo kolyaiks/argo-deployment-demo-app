@@ -1,4 +1,4 @@
-name: Java Maven Build & Create Docker image & Push to ECR & Update K8S image
+name: Helm version | Java Maven Build & Create Docker image & Push to ECR & Update K8S image
 
 on:
   push:
@@ -78,18 +78,16 @@ jobs:
         run: |
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-  update_deployment_yaml_for_dev_overlay:
+  update_deployment_yaml_for_dev_env:
     runs-on: ubuntu-latest
     needs:
       - build_scan_publish
     steps:
       - uses: actions/checkout@v4
         with:
-            repository: kolyaiks/argo-deployment-demo-infra
+            repository: kolyaiks/argo-deployment-demo-gitops
             ref: dev
             token: ${{secrets.ARGO_DEPLOYMENT_DEMO_INFRA_REPO_PAT}}
-
-      - uses: imranismail/setup-kustomize@v2
 
       # to use with while logging into ECR
       - name: Setup AWS ECR Details
@@ -106,11 +104,10 @@ jobs:
 
       - name: Updating the image version in deployment YAML
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{vars.AWS_ECR_REPO}}
           IMAGE_TAG: ${{ needs.build_scan_publish.outputs.IMAGE_TAG }}
-        run: kustomize edit set image 123456789123.dkr.ecr.us-east-1.amazonaws.com/argo-deployment-demo-app:0.0.1=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        working-directory: k8s-yaml/app/argo-deployment-demo-app/overlays/dev
+        run: |
+          sed -i "s/^  tag: \".*\"/  tag: \"${IMAGE_TAG}\"/" values-dev.yaml
+        working-directory: workloads/argo-deployment-demo-app
 
       - name: Pushing updated yaml to IAC repo
         env:
@@ -118,6 +115,8 @@ jobs:
         run: |
           git config user.email "gitops@niks.cloud"
           git config user.name "gitops"
-          git commit -am "Bumping application version to $IMAGE_TAG"
-          git pull --rebase
-          git push origin dev
+          if ! git diff --quiet; then
+            git commit -am "Bumping application version to $IMAGE_TAG"
+            git pull --rebase
+            git push origin dev
+          fi

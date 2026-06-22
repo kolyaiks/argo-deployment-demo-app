@@ -4,11 +4,23 @@ This is a minimal Spring Boot web application that uses Thymeleaf to render an H
 
 ## Pipeline Overview
 
-The CI pipeline is defined in `.github/workflows/update_dev.yml` and consists of two sequential jobs that run on every push or pull request to the `dev` branch.
+Two CI pipelines are defined in this repository. Both share the same build and publish steps but differ in how they update the target GitOps repository.
 
-The first job, `build_scan_publish`, compiles, tests, and packages the application. It checks out the source, sets up JDK 17 with Maven caching, runs `mvn clean verify`, and scans both the source code and its dependencies with Trivy for HIGH and CRITICAL vulnerabilities. After passing the scan, it authenticates to AWS using encrypted GitHub Secrets and logs Docker into the private Amazon ECR registry. It extracts the application version from `pom.xml` (for example `0.0.7`) to use as the Docker image tag, builds a multi-stage Docker image, runs Trivy again on the final container image, and pushes it to ECR.
+### Pipeline 1: `.github/workflows/update_dev_kustomize.yml` — Kustomize-based deployment
 
-The second job, `update_deployment_yaml_for_dev_overlay`, runs after the first job succeeds. It clones the infrastructure-as-code repository (`argo-deployment-demo-infra`) at the `dev` branch using a fine-grained Personal Access Token, installs `kustomize`, re-authenticates to ECR, and runs `kustomize edit set image` in the `overlays/dev` directory to update the image reference to the newly pushed version. It then commits the change with a message such as "Bumping application version to 0.0.7" and pushes to the `dev` branch of the infra repo. This push triggers ArgoCD (via webhook or polling) to sync the new desired state to the Kubernetes cluster.
+This pipeline consists of two sequential jobs that run on every push or pull request to the `dev` branch.
+
+**Job 1 — `build_scan_publish`:** Compiles, tests, and packages the application. It checks out the source, sets up JDK 17 with Maven caching, runs `mvn clean verify`, and scans both the source code and its dependencies with Trivy for HIGH and CRITICAL vulnerabilities. After passing the scan, it authenticates to AWS using encrypted GitHub Secrets and logs Docker into the private Amazon ECR registry. It extracts the application version from `pom.xml` (for example `0.0.7`) to use as the Docker image tag, builds a multi-stage Docker image, runs Trivy again on the final container image, and pushes it to ECR.
+
+**Job 2 — `update_deployment_yaml_for_dev_overlay`:** Runs after the first job succeeds. It clones the infrastructure-as-code repository (`argo-deployment-demo-infra`) at the `dev` branch using a fine-grained Personal Access Token, installs `kustomize`, re-authenticates to ECR, and runs `kustomize edit set image` in the `overlays/dev` directory to update the image reference to the newly pushed version. It then commits the change with a message such as "Bumping application version to 0.0.7" and pushes to the `dev` branch of the infra repo. This push triggers ArgoCD (via webhook or polling) to sync the new desired state to the Kubernetes cluster.
+
+### Pipeline 2: `.github/workflows/update_dev_helm.yml` — Helm-based deployment (App-of-Apps)
+
+This pipeline also consists of two sequential jobs. The first job is identical to Pipeline 1's build step.
+
+**Job 1 — `build_scan_publish`:** Same as in Pipeline 1 — compiles, tests, scans, builds, and pushes a Docker image to ECR.
+
+**Job 2 — `update_deployment_yaml_for_dev_env`:** Runs after the first job succeeds. It clones the GitOps repository `https://github.com/kolyaiks/argo-deployment-demo-gitops` at the `dev` branch using a fine-grained Personal Access Token, re-authenticates to ECR, and runs `sed` on `workloads/argo-deployment-demo-app/values-dev.yaml` to update the Helm values `image.tag` to the newly pushed version. It then commits the change with a message such as "Bumping application version to 0.0.7" and pushes to the `dev` branch of the GitOps repo. This push triggers ArgoCD (via its Application-of-Applications pattern) to sync the Helm-based deployment to the Kubernetes cluster.
 
 ## How to Run / Reproduce Locally
 
