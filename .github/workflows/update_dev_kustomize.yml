@@ -85,7 +85,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-            repository: kolyaiks/argo-deployment-demo-infra
+            repository: kolyaiks/argo-deployment-demo-infra-kustomize
             ref: dev
             token: ${{secrets.ARGO_DEPLOYMENT_DEMO_INFRA_REPO_PAT}}
 
