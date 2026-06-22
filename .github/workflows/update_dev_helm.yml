@@ -109,6 +109,13 @@ jobs:
           sed -i "s/^  tag: \".*\"/  tag: \"${IMAGE_TAG}\"/" values-dev.yaml
         working-directory: workloads/argo-deployment-demo-app
 
+      - name: Updating the appVersion in Chart.yaml
+        env:
+          IMAGE_TAG: ${{ needs.build_scan_publish.outputs.IMAGE_TAG }}
+        run: |
+          sed -i 's/^appVersion: ".*"/appVersion: "'"${IMAGE_TAG}"'"/' Chart.yaml
+        working-directory: workloads/argo-deployment-demo-app
+
       - name: Pushing updated yaml to IAC repo
         env:
           IMAGE_TAG: ${{ needs.build_scan_publish.outputs.IMAGE_TAG }}
