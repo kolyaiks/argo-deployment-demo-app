@@ -1,4 +1,4 @@
-name: Java Maven Build & Create Docker image & Push to ECR & Update K8S image
+name: Kustomize version | Java Maven Build & Create Docker image & Push to ECR & Update K8S image
 
 on:
   push:

@@ -6,7 +6,7 @@ This is a minimal Spring Boot web application that uses Thymeleaf to render an H
 
 Two CI pipelines are defined in this repository. Both share the same build and publish steps but differ in how they update the target GitOps repository.
 
-### Pipeline 1: `.github/workflows/update_dev.yml` — Kustomize-based deployment
+### Pipeline 1: `.github/workflows/update_dev_kustomize.yml` — Kustomize-based deployment
 
 This pipeline consists of two sequential jobs that run on every push or pull request to the `dev` branch.
 
@@ -14,7 +14,7 @@ This pipeline consists of two sequential jobs that run on every push or pull req
 
 **Job 2 — `update_deployment_yaml_for_dev_overlay`:** Runs after the first job succeeds. It clones the infrastructure-as-code repository (`argo-deployment-demo-infra`) at the `dev` branch using a fine-grained Personal Access Token, installs `kustomize`, re-authenticates to ECR, and runs `kustomize edit set image` in the `overlays/dev` directory to update the image reference to the newly pushed version. It then commits the change with a message such as "Bumping application version to 0.0.7" and pushes to the `dev` branch of the infra repo. This push triggers ArgoCD (via webhook or polling) to sync the new desired state to the Kubernetes cluster.
 
-### Pipeline 2: `.github/workflows/update_dev_app_of_apps.yml` — Helm-based deployment (App-of-Apps)
+### Pipeline 2: `.github/workflows/update_dev_helm.yml` — Helm-based deployment (App-of-Apps)
 
 This pipeline also consists of two sequential jobs. The first job is identical to Pipeline 1's build step.
 

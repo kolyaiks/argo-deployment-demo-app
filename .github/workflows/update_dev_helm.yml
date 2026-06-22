@@ -1,4 +1,4 @@
-name: App-of-Apps version | Java Maven Build & Create Docker image & Push to ECR & Update K8S image
+name: Helm version | Java Maven Build & Create Docker image & Push to ECR & Update K8S image
 
 on:
   push:
@@ -115,6 +115,8 @@ jobs:
         run: |
           git config user.email "gitops@niks.cloud"
           git config user.name "gitops"
-          git commit -am "Bumping application version to $IMAGE_TAG"
-          git pull --rebase
-          git push origin dev
+          if ! git diff --quiet; then
+            git commit -am "Bumping application version to $IMAGE_TAG"
+            git pull --rebase
+            git push origin dev
+          fi
